@@ -39,4 +39,10 @@ namespace IcToken:
 
     func decreaseAllowance(spender : felt, subtracted_value : Uint256) -> (success : felt):
     end
+
+    func get_token_value(c_token_amount: Uint256) -> (equiv_token_value : Uint256):
+    end
+
+    func get_c_token_value(token_amount: Uint256) -> (equiv_c_token_value : Uint256):
+    end
 end

@@ -2,11 +2,20 @@
 
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.cairo.common.bool import TRUE, FALSE
-from starkware.cairo.common.uint256 import Uint256, uint256_sub, uint256_add, uint256_eq
+from starkware.cairo.common.uint256 import (
+    Uint256, 
+    uint256_sub, 
+    uint256_add, 
+    uint256_eq, 
+    uint256_mul, 
+    uint256_unsigned_div_rem
+)
 from starkware.starknet.common.syscalls import get_contract_address
 
 from openzeppelin.token.erc20.IERC20 import IERC20
 from openzeppelin.token.erc20.library import ERC20
+
+from contracts.interfaces.i_c_pool import IcPool
 
 #
 # Storage
@@ -30,10 +39,12 @@ end
 
 @constructor
 func constructor{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-    underlying_asset : felt
+    underlying_asset : felt, 
+    c_pool_address : felt
 ):
     ERC20.initializer(109214297711982, 1666468686, 18)
     cToken_underlying_asset.write(underlying_asset)
+    cToken_pool.write(c_pool_address)
     return ()
 end
 
@@ -58,4 +69,45 @@ end
 func symbol{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}() -> (symbol : felt):
     let (symbol) = ERC20.symbol()
     return (symbol)
+end
+
+@view
+func get_token_value{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+    c_token_amount: Uint256
+) -> (equiv_token_value : Uint256):
+    alloc_locals
+    let (pool_address) = cToken_pool.read()
+    let (total_token_balance) = IcPool.get_token_balance(pool_address)
+    let (cToken_supply) = IcPool.get_c_token_balance(pool_address)
+
+    let (mul_res, _) = uint256_mul(c_token_amount, total_token_balance)
+
+    tempvar syscall_ptr = syscall_ptr
+    tempvar pedersen_ptr = pedersen_ptr
+    tempvar range_check_ptr = range_check_ptr
+
+    let (res, _) = uint256_unsigned_div_rem(mul_res, cToken_supply)
+
+    return (res)
+end
+
+
+@view
+func get_c_token_value{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+    token_amount: Uint256
+) -> (equiv_c_token_value : Uint256):
+    alloc_locals
+    let (pool_address) = cToken_pool.read()
+    let (total_token_balance) = IcPool.get_token_balance(pool_address)
+    let (cToken_supply) = IcPool.get_c_token_balance(pool_address)
+
+    let (mul_res, _) = uint256_mul(token_amount, cToken_supply)
+
+    tempvar syscall_ptr = syscall_ptr
+    tempvar pedersen_ptr = pedersen_ptr
+    tempvar range_check_ptr = range_check_ptr
+
+    let (res, _) = uint256_unsigned_div_rem(mul_res, total_token_balance)
+
+    return (res)
 end
