@@ -1,8 +1,8 @@
 %lang starknet
 
-from starkware.cairo.common.bool import FALSE
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.cairo.common.uint256 import Uint256
+from starkware.starknet.common.syscalls import get_caller_address
 
 from contracts.interfaces.i_c_token import IcToken
 from contracts.interfaces.i_c_pool import IcPool
@@ -75,6 +75,44 @@ func test_get_c_token_value{syscall_ptr : felt*, range_check_ptr, pedersen_ptr :
     let rand_uint = Uint256(100,0)
     let (equivalent_value) = IcToken.get_c_token_value(c_token, rand_uint)
     assert equivalent_value = Uint256(110,0)
+
+    return ()
+end
+
+
+@external
+func test_mint{syscall_ptr : felt*, range_check_ptr, pedersen_ptr : HashBuiltin*}():
+    alloc_locals
+     
+    let (local c_pool, local token, local c_token) = get_contract_addresses()
+    let rand_uint = Uint256(100,0)
+    let (_mintedAmount) = IcToken.mint(c_token, PRANK_USER_1, rand_uint)
+    assert _mintedAmount = Uint256(110,0)
+
+    let (balance) = IcToken.balanceOf(c_token, PRANK_USER_1)
+    assert Uint256(110,0) = balance
+
+    return ()
+end
+
+
+@external
+func test_burn{syscall_ptr : felt*, range_check_ptr, pedersen_ptr : HashBuiltin*}():
+    alloc_locals
+     
+    let (local c_pool, local token, local c_token) = get_contract_addresses()
+    let rand_uint = Uint256(100,0)
+
+    %{ stop_prank_callable = start_prank(111, ids.c_token) %}
+        IcToken.mint(c_token, 111, rand_uint)
+        let (balance) = IcToken.balanceOf(c_token, 111)
+        let (caller_addr) = get_caller_address()
+        let (returned_amount) = IcToken.burn(c_token, rand_uint)
+        assert returned_amount = Uint256(90,0)
+        let (balance) = IcToken.balanceOf(c_token, PRANK_USER_1)
+        assert balance = Uint256(10,0)
+    %{ stop_prank_callable() %}
+
 
     return ()
 end

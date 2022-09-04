@@ -11,6 +11,7 @@ from starkware.cairo.common.uint256 import (
     uint256_unsigned_div_rem
 )
 from starkware.starknet.common.syscalls import get_contract_address
+from starkware.starknet.common.syscalls import get_caller_address
 
 from openzeppelin.token.erc20.IERC20 import IERC20
 from openzeppelin.token.erc20.library import ERC20
@@ -72,6 +73,15 @@ func symbol{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}()
 end
 
 @view
+func balanceOf{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+    account: felt
+) -> (balance: Uint256):
+    let (balance: Uint256) = ERC20.balance_of(account)
+    return (balance)
+end
+
+
+@view
 func get_token_value{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     c_token_amount: Uint256
 ) -> (equiv_token_value : Uint256):
@@ -110,4 +120,30 @@ func get_c_token_value{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_c
     let (res, _) = uint256_unsigned_div_rem(mul_res, total_token_balance)
 
     return (res)
+end
+
+@external
+func mint{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+    to: felt,
+    token_amount: Uint256
+) -> (res : Uint256):
+    alloc_locals
+
+    let (cToken_amount) = get_c_token_value(token_amount)
+    ERC20._mint(to, cToken_amount)
+
+    return (cToken_amount)
+end
+
+@external
+func burn{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+    c_token_amount: Uint256
+) -> (res : Uint256):
+    alloc_locals
+
+    let (caller) = get_caller_address()
+    ERC20._burn(caller, c_token_amount)
+    let (token_amount) = get_token_value(c_token_amount)
+    # send _cTokenAmount to caller
+    return (token_amount)
 end
