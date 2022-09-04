@@ -16,18 +16,13 @@ from starkware.starknet.common.syscalls import get_caller_address
 from openzeppelin.token.erc20.IERC20 import IERC20
 from openzeppelin.token.erc20.library import ERC20
 
-from contracts.interfaces.i_c_pool import IcPool
-
+from contracts.protocol.c_pool_ns import CPool
 #
 # Storage
 #
 
 @storage_var
 func cToken_underlying_asset() -> (res : felt):
-end
-
-@storage_var
-func cToken_pool() -> (res : felt):
 end
 
 @storage_var
@@ -40,12 +35,14 @@ end
 
 @constructor
 func constructor{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-    underlying_asset : felt, 
-    c_pool_address : felt
+    underlying_asset : felt
 ):
     ERC20.initializer(109214297711982, 1666468686, 18)
     cToken_underlying_asset.write(underlying_asset)
-    cToken_pool.write(c_pool_address)
+
+    CPool.set_token_balance(Uint256(1000000000, 0)) # 1e9
+    CPool.set_cToken_balance(Uint256(1100000000, 0)) # 1.1e9
+
     return ()
 end
 
@@ -80,15 +77,15 @@ func balanceOf{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr
     return (balance)
 end
 
-
+# @dev calculates the value of c_token_amount cTokens in underlying asset
 @view
 func get_token_value{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     c_token_amount: Uint256
 ) -> (equiv_token_value : Uint256):
     alloc_locals
-    let (pool_address) = cToken_pool.read()
-    let (total_token_balance) = IcPool.get_token_balance(pool_address)
-    let (cToken_supply) = IcPool.get_c_token_balance(pool_address)
+
+    let (total_token_balance) = CPool.get_token_balance()
+    let (cToken_supply) = CPool.get_c_token_balance()
 
     let (mul_res, _) = uint256_mul(c_token_amount, total_token_balance)
 
@@ -101,15 +98,14 @@ func get_token_value{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_che
     return (res)
 end
 
-
+# @dev calculates the value of token_amount of underlying asset in cTokens
 @view
 func get_c_token_value{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     token_amount: Uint256
 ) -> (equiv_c_token_value : Uint256):
     alloc_locals
-    let (pool_address) = cToken_pool.read()
-    let (total_token_balance) = IcPool.get_token_balance(pool_address)
-    let (cToken_supply) = IcPool.get_c_token_balance(pool_address)
+    let (total_token_balance) = CPool.get_token_balance()
+    let (cToken_supply) = CPool.get_c_token_balance()
 
     let (mul_res, _) = uint256_mul(token_amount, cToken_supply)
 
@@ -134,6 +130,7 @@ func mint{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     let (cToken_amount) = get_c_token_value(token_amount)
     let (underlying_addr) = UNDERLYING_ASSET_ADDRESS()
 
+    update_balances_on_mint(token_amount, cToken_amount)
     IERC20.transferFrom(underlying_addr, caller, contract_address, token_amount)
     ERC20._mint(to, cToken_amount)
     return (cToken_amount)
@@ -148,9 +145,47 @@ func burn{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     let (token_amount) = get_token_value(c_token_amount)
     let (caller) = get_caller_address()
     let (underlying_addr) = UNDERLYING_ASSET_ADDRESS()
-
+    
+    update_balances_on_burn(token_amount, c_token_amount)
     IERC20.transfer(underlying_addr, caller, token_amount)
     ERC20._burn(caller, c_token_amount)
     
     return (token_amount)
+end
+
+#
+# Internal functions
+#
+func update_balances_on_mint{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+    token_amount: Uint256,
+    cToken_amount: Uint256
+):
+    alloc_locals
+
+    let (total_token_balance) = CPool.get_token_balance()
+    let (cToken_supply) = CPool.get_c_token_balance()
+
+    let (new_total_token_balance, _) = uint256_add(total_token_balance, token_amount)
+    let (new_cToken_supply, _) = uint256_add(cToken_supply, cToken_amount)
+
+    CPool.set_token_balance(new_total_token_balance)
+    CPool.set_cToken_balance(new_cToken_supply)
+    return ()
+end
+
+func update_balances_on_burn{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+    token_amount: Uint256,
+    cToken_amount: Uint256
+): 
+    alloc_locals
+
+    let (total_token_balance) = CPool.get_token_balance()
+    let (cToken_supply) = CPool.get_c_token_balance()
+
+    let (new_total_token_balance) = uint256_sub(total_token_balance, token_amount)
+    let (new_cToken_supply) = uint256_sub(cToken_supply, cToken_amount)
+
+    CPool.set_token_balance(new_total_token_balance)
+    CPool.set_cToken_balance(new_cToken_supply)
+    return ()
 end
