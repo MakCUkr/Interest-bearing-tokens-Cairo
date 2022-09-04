@@ -129,9 +129,13 @@ func mint{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
 ) -> (res : Uint256):
     alloc_locals
 
+    let (caller) = get_caller_address()
+    let (contract_address) = get_contract_address()
     let (cToken_amount) = get_c_token_value(token_amount)
-    ERC20._mint(to, cToken_amount)
+    let (underlying_addr) = UNDERLYING_ASSET_ADDRESS()
 
+    IERC20.transferFrom(underlying_addr, caller, contract_address, token_amount)
+    ERC20._mint(to, cToken_amount)
     return (cToken_amount)
 end
 
@@ -141,9 +145,12 @@ func burn{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
 ) -> (res : Uint256):
     alloc_locals
 
-    let (caller) = get_caller_address()
-    ERC20._burn(caller, c_token_amount)
     let (token_amount) = get_token_value(c_token_amount)
-    # send _cTokenAmount to caller
+    let (caller) = get_caller_address()
+    let (underlying_addr) = UNDERLYING_ASSET_ADDRESS()
+
+    IERC20.transfer(underlying_addr, caller, token_amount)
+    ERC20._burn(caller, c_token_amount)
+    
     return (token_amount)
 end
